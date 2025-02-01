@@ -295,9 +295,11 @@ Resources:
           phases:
             install:
               commands:
+                - cd my-project/package.json  # Change to the correct folder containing package.json
                 - npm install
             build:
               commands:
+                - cd frontend  # Ensure you're in the correct folder before building
                 - npm run build
           artifacts:
             files:
@@ -306,6 +308,7 @@ Resources:
         ComputeType: BUILD_GENERAL1_SMALL
         Image: aws/codebuild/standard:5.0
         Type: LINUX_CONTAINER
+
 
 
   # ✅ AWS CodeDeploy Application
