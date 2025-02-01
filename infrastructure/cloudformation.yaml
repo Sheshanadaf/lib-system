@@ -113,7 +113,7 @@ Resources:
   LibraryCodePipelineRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: CodePipelineRole2
+      RoleName: CodePipelineRole3
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -133,7 +133,7 @@ Resources:
                   - "s3:GetObject"
                   - "s3:PutObject"
                   - "s3:ListBucket"
-                Resource: 
+                Resource:
                   - !Sub "arn:aws:s3:::${FrontendS3Bucket}"
                   - !Sub "arn:aws:s3:::${FrontendS3Bucket}/*"
               - Effect: Allow
@@ -141,7 +141,10 @@ Resources:
                   - "codestar-connections:UseConnection"
                   - "codestar-connections:GetConnection"
                 Resource: "arn:aws:codeconnections:us-east-1:583966366465:connection/31abb4de-0ade-418a-baff-4c4a07cad0de"
-
+              - Effect: Allow
+                Action:
+                  - "codebuild:StartBuild"
+                Resource: !Sub "arn:aws:codebuild:us-east-1:583966366465:project/LibraryCodeBuild"
 
   LibraryCodeBuildRole:
     Type: AWS::IAM::Role
@@ -240,7 +243,7 @@ Resources:
                 Version: '1'
               Configuration:
                 ConnectionArn: arn:aws:codeconnections:us-east-1:583966366465:connection/31abb4de-0ade-418a-baff-4c4a07cad0de  # Replace with actual CodeStar connection ARN
-                FullRepositoryId: https://github.com/Sheshanadaf/CLoud_project_aws.git
+                FullRepositoryId: Sheshanadaf/CLoud_project_aws
                 BranchName: main
               OutputArtifacts:
                 - Name: SourceArtifact
