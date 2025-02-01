@@ -109,6 +109,227 @@ Resources:
         - Type: forward
           TargetGroupArn: !Ref ALBTargetGroup
 
+
+  LibraryCodePipelineRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: CodePipelineRole2
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - codepipeline.amazonaws.com
+            Action:
+              - "sts:AssumeRole"
+      Policies:
+        - PolicyName: CodePipelinePermissions
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "s3:GetObject"
+                  - "s3:PutObject"
+                  - "s3:ListBucket"
+                Resource: 
+                  - !Sub "arn:aws:s3:::${FrontendS3Bucket}"
+                  - !Sub "arn:aws:s3:::${FrontendS3Bucket}/*"
+              - Effect: Allow
+                Action:
+                  - "codestar-connections:UseConnection"
+                  - "codestar-connections:GetConnection"
+                Resource: "arn:aws:codeconnections:us-east-1:583966366465:connection/31abb4de-0ade-418a-baff-4c4a07cad0de"
+
+
+  LibraryCodeBuildRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: CodeBuildRole
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: 
+                - codebuild.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CodeBuildPermissions
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                Resource:
+                  - !Sub arn:aws:s3:::${FrontendS3Bucket}/*
+                  - !Sub arn:aws:s3:::${FrontendS3Bucket}
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - logs:CreateLogGroup
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - codepipeline:PutJobSuccessResult
+                  - codepipeline:PutJobFailureResult
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - ecr:GetAuthorizationToken
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:PutImage
+                Resource: "*"
+      
+  LibraryCodeDeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: CodeDeployRole
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - codedeploy.amazonaws.com
+            Action:
+              - "sts:AssumeRole"
+      Policies:
+        - PolicyName: CodeDeployPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "ec2:DescribeInstances"
+                  - "ec2:DescribeInstanceStatus"
+                  - "tag:GetResources"
+                  - "autoscaling:CompleteLifecycleAction"
+                  - "autoscaling:DeleteLifecycleHook"
+                  - "autoscaling:PutLifecycleHook"
+                  - "autoscaling:RecordLifecycleActionHeartbeat"
+                  - "autoscaling:DescribeAutoScalingGroups"
+                  - "autoscaling:DescribeLifecycleHooks"
+                  - "autoscaling:DescribeScalingActivities"
+                  - "autoscaling:DescribeNotificationConfigurations"
+                Resource: "*"
+
+
+  # ✅ AWS CodePipeline (CI/CD)
+  LibraryCodePipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      Name: LibraryPipeline
+      RoleArn: !GetAtt LibraryCodePipelineRole.Arn  # Replace with actual ARN
+      ArtifactStore:
+        Type: S3
+        Location: !Ref FrontendS3Bucket
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: GitHubSource
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Provider: CodeStarSourceConnection  # ✅ Use AWS CodeStar instead of OAuth
+                Version: '1'
+              Configuration:
+                ConnectionArn: arn:aws:codeconnections:us-east-1:583966366465:connection/31abb4de-0ade-418a-baff-4c4a07cad0de  # Replace with actual CodeStar connection ARN
+                FullRepositoryId: https://github.com/Sheshanadaf/CLoud_project_aws.git
+                BranchName: main
+              OutputArtifacts:
+                - Name: SourceArtifact
+              RunOrder: 1
+
+        - Name: Build
+          Actions:
+            - Name: BuildFrontend
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: '1'
+              Configuration:
+                ProjectName: !Ref LibraryCodeBuild
+              InputArtifacts:
+                - Name: SourceArtifact
+              OutputArtifacts:
+                - Name: BuildArtifact
+              RunOrder: 2
+
+        - Name: Deploy
+          Actions:
+            - Name: DeployToEC2
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CodeDeploy
+                Version: '1'
+              Configuration:
+                ApplicationName: !Ref LibraryCodeDeploy
+                DeploymentGroupName: !Ref LibraryDeploymentGroup
+              InputArtifacts:
+                - Name: BuildArtifact
+              RunOrder: 3
+
+  # ✅ AWS CodeBuild (CI/CD Build Stage)
+  LibraryCodeBuild:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: LibraryCodeBuild
+      ServiceRole: !GetAtt LibraryCodeBuildRole.Arn
+      Artifacts:
+        Type: CODEPIPELINE
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: |  # ✅ Moved inside Source block
+          version: 0.2
+          phases:
+            install:
+              commands:
+                - npm install
+            build:
+              commands:
+                - npm run build
+          artifacts:
+            files:
+              - '**/*'
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:5.0
+        Type: LINUX_CONTAINER
+
+
+  # ✅ AWS CodeDeploy Application
+  LibraryCodeDeploy:
+    Type: AWS::CodeDeploy::Application
+    Properties:
+      ApplicationName: LibraryApp
+
+  # ✅ AWS CodeDeploy Deployment Group
+  LibraryDeploymentGroup:
+    Type: AWS::CodeDeploy::DeploymentGroup
+    Properties:
+      ApplicationName: !Ref LibraryCodeDeploy
+      DeploymentGroupName: LibraryDeploymentGroup
+      ServiceRoleArn: !GetAtt LibraryCodeDeployRole.Arn  # Replace with actual ARN
+      DeploymentConfigName: CodeDeployDefault.AllAtOnce
+      Ec2TagFilters:
+        - Key: Name
+          Value: LibraryEC2
+          Type: KEY_AND_VALUE
+      AutoScalingGroups:
+        - !Ref AutoScalingGroup  # Attach Auto Scaling Group
+      LoadBalancerInfo:
+        TargetGroupInfoList:
+          - Name: ALBTargetGroup  # Attach to ALB Target Group
+
+
   # AWS Lambda Function
   # LibraryLambdaFunction:
   #   Type: AWS::Lambda::Function
