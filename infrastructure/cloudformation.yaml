@@ -1,0 +1,137 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Resources:
+  # S3 Bucket for Frontend Hosting
+  FrontendS3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: my-library-frontend-bucket-sheshan-hebron
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: error.html
+
+  # DynamoDB Table for Library Data
+  LibraryDynamoDB:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: LibraryTable1
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+
+  # Security Group for EC2 Instances
+  EC2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow HTTP and SSH access
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+
+  # Launch Template for Auto Scaling Group
+  LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: LibraryLaunchTemplate
+      VersionDescription: Initial Version
+      LaunchTemplateData:
+        ImageId: ami-0c614dee691cbbf37  # Update AMI for your region
+        InstanceType: t2.micro
+        SecurityGroupIds:
+          - !GetAtt EC2SecurityGroup.GroupId  # ✅ Correct way to reference Security Group ID
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+              - Key: Name
+                Value: LibraryInstance
+
+
+  
+
+  # Auto Scaling Group
+  AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      MinSize: '2'
+      MaxSize: '5'
+      DesiredCapacity: '2'
+      VPCZoneIdentifier:
+        - subnet-0761104f82f35a116 # Replace with your subnet ID
+      TargetGroupARNs:
+        - !Ref ALBTargetGroup
+      LaunchTemplate:
+        LaunchTemplateId: !Ref LaunchTemplate
+        Version: !GetAtt LaunchTemplate.LatestVersionNumber
+
+
+  # Application Load Balancer
+  ApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: LibraryALB
+      Scheme: internet-facing
+      LoadBalancerAttributes:
+        - Key: idle_timeout.timeout_seconds
+          Value: '60'
+      SecurityGroups:
+        - !GetAtt EC2SecurityGroup.GroupId 
+      Subnets:
+        - subnet-0e873e785de68682d # Replace with your subnet ID
+        - subnet-0c6bc9756cd950755
+
+  # Target Group for ALB
+  ALBTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      VpcId: vpc-03bb2a2ae6d53f14e # Replace with your actual VPC ID
+      Protocol: HTTP
+      Port: 80
+      TargetType: instance
+
+  # ALB Listener
+  ALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Protocol: HTTP
+      Port: 80
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref ALBTargetGroup
+
+  # AWS Lambda Function
+  # LibraryLambdaFunction:
+  #   Type: AWS::Lambda::Function
+  #   DependsOn: FrontendS3Bucket  # Ensure S3 bucket is created first
+  #   Properties:
+  #     FunctionName: LibraryBackgroundTask
+  #     Handler: index.handler
+  #     Runtime: nodejs22.x
+  #     Role: arn:aws:iam::583966366465:role/project-role # Replace with actual IAM role
+  #     Code:
+  #       S3Bucket: !Ref FrontendS3Bucket  # Use the S3 bucket reference
+  #       S3Key: library-lambda.zip
+
+
+Outputs:
+  FrontendBucket:
+    Description: S3 Bucket for React frontend
+    Value: !Ref FrontendS3Bucket
+
+  ALBDNSName:
+    Description: Application Load Balancer DNS
+    Value: !GetAtt ApplicationLoadBalancer.DNSName
+
+  DynamoDBTableName:
+    Description: DynamoDB Table Name
+    Value: !Ref LibraryDynamoDB

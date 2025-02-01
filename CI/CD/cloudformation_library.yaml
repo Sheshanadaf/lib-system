@@ -1,0 +1,69 @@
+  # CodePipeline for CI/CD
+  LibraryCodePipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      Name: LibraryPipeline
+      RoleArn: arn:aws:iam::583966366465:role/CodePipelineRole # Replace with actual ARN
+      ArtifactStore:
+        Type: S3
+        Location: !Ref PipelineS3Bucket
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: GitLabSource
+              ActionTypeId:
+                Category: Source
+                Owner: Custom
+                Provider: GitLab
+                Version: '1'
+              Configuration:
+                ConnectionArn: arn:aws:codestar-connections:region:123456789012:connection/your-connection-id
+                FullRepositoryId: your-gitlab-user/library-management
+                BranchName: main
+              OutputArtifacts:
+                - Name: SourceArtifact
+              RunOrder: 1
+
+        - Name: Build
+          Actions:
+            - Name: CodeBuild
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: '1'
+              Configuration:
+                ProjectName: !Ref LibraryCodeBuild
+              InputArtifacts:
+                - Name: SourceArtifact
+              OutputArtifacts:
+                - Name: BuildArtifact
+              RunOrder: 1
+
+        - Name: Deploy
+          Actions:
+            - Name: DeployToS3
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: S3
+                Version: '1'
+              Configuration:
+                BucketName: !Ref FrontendS3Bucket
+                Extract: true
+              InputArtifacts:
+                - Name: BuildArtifact
+              RunOrder: 1
+
+            - Name: DeployToEC2
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CodeDeploy
+                Version: '1'
+              Configuration:
+                ApplicationName: LibraryApp
+                DeploymentGroupName: LibraryDeploymentGroup
+              InputArtifacts:
+                - Name: BuildArtifact
+              RunOrder: 2
