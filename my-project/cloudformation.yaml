@@ -49,6 +49,16 @@ Resources:
         InstanceType: t2.micro
         SecurityGroupIds:
           - !GetAtt EC2SecurityGroup.GroupId  # ✅ Correct way to reference Security Group ID
+        UserData:
+          Fn::Base64: |
+            sudo yum update -y
+            sudo yum install ruby wget
+            cd /home/ec2-user
+            wget https://aws-codedeploy-us-east-1.s3.us-east-1.amazonaws.com/latest/install
+            chmod +x install
+            sudo ./install auto
+            sudo service codedeploy-agent start
+
         TagSpecifications:
           - ResourceType: instance
             Tags:
@@ -113,7 +123,7 @@ Resources:
   LibraryCodePipelineRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: CodePipelineRole3
+      RoleName: CodePipelineRole1
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -121,30 +131,65 @@ Resources:
             Principal:
               Service:
                 - codepipeline.amazonaws.com
-            Action:
-              - "sts:AssumeRole"
+            Action: sts:AssumeRole
       Policies:
         - PolicyName: CodePipelinePermissions
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
+              # ✅ Allow access to ALL CodeDeploy deployment configs
               - Effect: Allow
                 Action:
-                  - "s3:GetObject"
-                  - "s3:PutObject"
-                  - "s3:ListBucket"
+                  - codedeploy:GetDeploymentConfig
+                Resource:
+                  - "arn:aws:codedeploy:us-east-1:583966366465:deploymentconfig:*"  # ✅ Changed to wildcard for all deployment configs
+
+              # ✅ Allow CodeDeploy actions for deployments
+              - Effect: Allow
+                Action:
+                  - codedeploy:CreateDeployment
+                  - codedeploy:GetDeployment
+                  - codedeploy:RegisterApplicationRevision
+                  - codedeploy:GetApplication
+                  - codedeploy:GetDeploymentGroup
+                Resource:
+                  - "arn:aws:codedeploy:us-east-1:583966366465:application:LibraryApp"
+                  - "arn:aws:codedeploy:us-east-1:583966366465:deploymentgroup:LibraryApp/LibraryDeploymentGroup"
+
+              # ✅ Allow CodeBuild permissions
+              - Effect: Allow
+                Action:
+                  - codebuild:StartBuild
+                  - codebuild:BatchGetBuilds
+                Resource:
+                  - "arn:aws:codebuild:us-east-1:583966366465:project/LibraryCodeBuild"
+
+              # ✅ Allow CodePipeline permissions
+              - Effect: Allow
+                Action:
+                  - codepipeline:PutJobSuccessResult
+                  - codepipeline:PutJobFailureResult
+                Resource: "*"
+
+              # ✅ Allow S3 access
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:ListBucket
                 Resource:
                   - !Sub "arn:aws:s3:::${FrontendS3Bucket}"
                   - !Sub "arn:aws:s3:::${FrontendS3Bucket}/*"
+
+              # ✅ Allow CodeStar Connections (for GitHub/Bitbucket)
               - Effect: Allow
                 Action:
-                  - "codestar-connections:UseConnection"
-                  - "codestar-connections:GetConnection"
+                  - codestar-connections:UseConnection
+                  - codestar-connections:GetConnection
                 Resource: "arn:aws:codeconnections:us-east-1:583966366465:connection/31abb4de-0ade-418a-baff-4c4a07cad0de"
-              - Effect: Allow
-                Action:
-                  - "codebuild:StartBuild"
-                Resource: !Sub "arn:aws:codebuild:us-east-1:583966366465:project/LibraryCodeBuild"
+
+
+
 
   LibraryCodeBuildRole:
     Type: AWS::IAM::Role
@@ -295,12 +340,11 @@ Resources:
           phases:
             install:
               commands:
-                - cd my-project/package.json  # Change to the correct folder containing package.json
                 - npm install
             build:
               commands:
-                - cd frontend  # Ensure you're in the correct folder before building
-                - npm run build
+                - npm install -g vite  # Install vite globally if not already installed
+                - vite build  # Use the Vite build command
           artifacts:
             files:
               - '**/*'
