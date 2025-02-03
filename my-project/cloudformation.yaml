@@ -234,7 +234,7 @@ Resources:
                 Action:
                   - codestar-connections:UseConnection
                   - codestar-connections:GetConnection
-                Resource: "arn:aws:codeconnections:ap-south-1:583966366465:connection/73137bfd-0dfc-433d-be8d-1454d46fe9e5"
+                Resource: "arn:aws:codeconnections:us-east-1:583966366465:connection/6e47d37e-a0ee-4046-855e-052c89fbfe46"
                           
 
 
@@ -350,8 +350,8 @@ Resources:
                 Provider: CodeStarSourceConnection  # ✅ Use AWS CodeStar instead of OAuth
                 Version: '1'
               Configuration:
-                ConnectionArn: arn:aws:codeconnections:ap-south-1:583966366465:connection/73137bfd-0dfc-433d-be8d-1454d46fe9e5  # Replace with actual CodeStar connection ARN
-                FullRepositoryId: Sheshanadaf/cloud-proj-aws-frontend
+                ConnectionArn: arn:aws:codeconnections:us-east-1:583966366465:connection/6e47d37e-a0ee-4046-855e-052c89fbfe46  # Replace with actual CodeStar connection ARN
+                FullRepositoryId: Sheshanadaf/lib-system
                 BranchName: main
               OutputArtifacts:
                 - Name: SourceArtifact
@@ -403,6 +403,7 @@ Resources:
           phases:
             install:
               commands:
+                - cd my-project
                 - echo Installing dependencies...
                 - npm install
             build:
@@ -415,7 +416,7 @@ Resources:
                 - ls -a  # ✅ Recursively list files in the dist/ folder
           artifacts:
             files:
-              - '**/*'
+              - 'my-project/**/*'
             
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
