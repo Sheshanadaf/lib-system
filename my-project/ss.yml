@@ -101,9 +101,6 @@ Resources:
             sudo ./install auto
             sudo service codedeploy-agent start
             sudo systemctl enable codedeploy-agent
-            sudo yum install -y httpd
-            sudo service httpd start
-            sudo systemctl enable httpd
 
         TagSpecifications:
           - ResourceType: instance
@@ -153,7 +150,11 @@ Resources:
       Protocol: HTTP
       Port: 80
       TargetType: instance
-
+      HealthCheckPath: /health # Add a health check path (or keep it default)
+      HealthCheckIntervalSeconds: 30 # Optional
+      HealthCheckTimeoutSeconds: 5 # Optional
+      UnhealthyThresholdCount: 3 # Optional
+      HealthyThresholdCount: 5 # Optional
 
   # ALB Listener
   ALBListener:
@@ -375,15 +376,15 @@ Resources:
 
         - Name: Deploy
           Actions:
-            - Name: DeployToEC2
+            - Name: DeployToS3
               ActionTypeId:
                 Category: Deploy
                 Owner: AWS
-                Provider: CodeDeploy
+                Provider: S3
                 Version: '1'
               Configuration:
-                ApplicationName: !Ref LibraryCodeDeploy  # CodeDeploy App Name
-                DeploymentGroupName: !Ref LibraryDeploymentGroup  # Deployment Group
+                BucketName: !Ref FrontendS3Bucket
+                Extract: 'true'  # This will automatically extract the build artifacts to the bucket
               InputArtifacts:
                 - Name: BuildArtifact
               RunOrder: 3
@@ -415,7 +416,7 @@ Resources:
                 - ls -a  # ✅ Recursively list files in the dist/ folder
           artifacts:
             files:
-              - '**/*'
+              - 'dist/**/*'
             
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
