@@ -177,7 +177,7 @@ Resources:
         - !Ref ALBTargetBackEndGroup
       LaunchTemplate:
         LaunchTemplateId: !Ref LaunchTemplateForBackEnd
-        Version: !GetAtt LaunchTemplate.LatestVersionNumber
+        Version: !GetAtt LaunchTemplateForBackEnd.LatestVersionNumber
 
 
   # Application Load Balancer
@@ -499,7 +499,7 @@ Resources:
                 DeploymentGroupName: !Ref LibraryDeploymentGroupBackend
               InputArtifacts:
                 - Name: BackendBuildArtifact
-              RunOrder: 2
+              RunOrder: 3
 
   # ✅ AWS CodeBuild (CI/CD Build Stage)
   LibraryCodeBuild:
