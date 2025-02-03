@@ -129,12 +129,41 @@ Resources:
         LaunchTemplateId: !Ref LaunchTemplate
         Version: !GetAtt LaunchTemplate.LatestVersionNumber
 
+  # Auto Scaling Group
+  AutoScalingBackEndGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      MinSize: '2'
+      MaxSize: '5'
+      DesiredCapacity: '2'
+      VPCZoneIdentifier:
+        - subnet-0e873e785de68682d # Replace with your subnet ID
+      TargetGroupARNs:
+        - !Ref ALBTargetBackEndGroup
+      LaunchTemplate:
+        LaunchTemplateId: !Ref LaunchTemplate
+        Version: !GetAtt LaunchTemplate.LatestVersionNumber
+
 
   # Application Load Balancer
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
       Name: LibraryALB
+      Scheme: internet-facing
+      LoadBalancerAttributes:
+        - Key: idle_timeout.timeout_seconds
+          Value: '60'
+      SecurityGroups:
+        - !GetAtt EC2SecurityGroup.GroupId 
+      Subnets:
+        - subnet-0e873e785de68682d # Replace with your subnet ID
+        - subnet-0c6bc9756cd950755
+  
+  ApplicationLoadBalancerForBackEnd:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: LibraryALBForBackEnd
       Scheme: internet-facing
       LoadBalancerAttributes:
         - Key: idle_timeout.timeout_seconds
@@ -154,6 +183,14 @@ Resources:
       Port: 80
       TargetType: instance
 
+  ALBTargetBackEndGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      VpcId: vpc-03bb2a2ae6d53f14e # Replace with your actual VPC ID
+      Protocol: HTTP
+      Port: 80
+      TargetType: instance
+
 
   # ALB Listener
   ALBListener:
@@ -165,12 +202,22 @@ Resources:
       DefaultActions:
         - Type: forward
           TargetGroupArn: !Ref ALBTargetGroup
+  
+  ALBListenerForBackend:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Protocol: HTTP
+      Port: 443
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref ALBTargetBackEndGroup
 
 
   LibraryCodePipelineRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: CodePipelineRole3
+      RoleName: CodePipelineRole7
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -202,7 +249,10 @@ Resources:
                   - codedeploy:GetDeploymentGroup
                 Resource:
                   - "arn:aws:codedeploy:us-east-1:583966366465:application:LibraryApp"
+                  - "arn:aws:codedeploy:us-east-1:583966366465:application:LibraryBackApp"
                   - "arn:aws:codedeploy:us-east-1:583966366465:deploymentgroup:LibraryApp/LibraryDeploymentGroup"
+                  - "arn:aws:codedeploy:us-east-1:583966366465:deploymentgroup:LibraryBackApp/LibraryDeploymentGroupBackend"
+                  
 
               # ✅ Allow CodeBuild permissions
               - Effect: Allow
@@ -211,6 +261,7 @@ Resources:
                   - codebuild:BatchGetBuilds
                 Resource:
                   - "arn:aws:codebuild:us-east-1:583966366465:project/LibraryCodeBuild"
+                  - "arn:aws:codebuild:us-east-1:583966366465:project/LibraryCodeBuildBackend"
 
               # ✅ Allow CodePipeline permissions
               - Effect: Allow
@@ -372,6 +423,20 @@ Resources:
               OutputArtifacts:
                 - Name: BuildArtifact
               RunOrder: 2
+        
+            - Name: BuildBackend
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: '1'
+              Configuration:
+                ProjectName: !Ref LibraryCodeBuildBackend
+              InputArtifacts:
+                - Name: SourceArtifact
+              OutputArtifacts:
+                - Name: BackendBuildArtifact
+              RunOrder: 2
 
         - Name: Deploy
           Actions:
@@ -387,6 +452,19 @@ Resources:
               InputArtifacts:
                 - Name: BuildArtifact
               RunOrder: 3
+
+            - Name: DeployBackend
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CodeDeploy
+                Version: '1'
+              Configuration:
+                ApplicationName: !Ref LibraryCodeDeployBackend
+                DeploymentGroupName: !Ref LibraryDeploymentGroupBackend
+              InputArtifacts:
+                - Name: BackendBuildArtifact
+              RunOrder: 2
 
   # ✅ AWS CodeBuild (CI/CD Build Stage)
   LibraryCodeBuild:
@@ -417,7 +495,41 @@ Resources:
           artifacts:
             files:
               - 'my-project/**/*'
-            
+
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/amazonlinux-x86_64-standard:5.0
+        Type: LINUX_CONTAINER
+  
+  LibraryCodeBuildBackend:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: LibraryCodeBuildBackend
+      ServiceRole: !GetAtt LibraryCodeBuildRole.Arn
+      Artifacts:
+        Type: CODEPIPELINE
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: |  # ✅ Moved inside Source block
+          version: 0.2
+          phases:
+            install:
+              commands:
+                - cd backend
+                - echo Installing dependencies...
+                - npm install
+            build:
+              commands:
+                - echo Building the React app...
+            post_build:
+              commands:
+                - echo "Zipping backend files..."
+                - zip -r backend.zip .
+                - ls -a  # ✅ Recursively list files in the dist/ folder
+          artifacts:
+            files:
+              - 'backend/**/*'
+
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
         Image: aws/codebuild/amazonlinux-x86_64-standard:5.0
@@ -430,6 +542,11 @@ Resources:
     Type: AWS::CodeDeploy::Application
     Properties:
       ApplicationName: LibraryApp
+
+  LibraryCodeDeployBackend:
+    Type: AWS::CodeDeploy::Application
+    Properties:
+      ApplicationName: LibraryBackApp
 
   # ✅ AWS CodeDeploy Deployment Group
   LibraryDeploymentGroup:
@@ -453,6 +570,28 @@ Resources:
       LoadBalancerInfo:
         TargetGroupInfoList:
           - Name: ALBTargetGroup  # Attach to ALB Target Group
+
+  LibraryDeploymentGroupBackend:
+    Type: AWS::CodeDeploy::DeploymentGroup
+    Properties:
+      ApplicationName: !Ref LibraryCodeDeployBackend
+      DeploymentGroupName: LibraryDeploymentGroupBackend
+      ServiceRoleArn: !GetAtt LibraryCodeDeployRole.Arn  # Replace with actual ARN
+      DeploymentConfigName: CodeDeployDefault.AllAtOnce
+      Ec2TagFilters:
+        - Key: Name
+          Value: LibraryEC2
+          Type: KEY_AND_VALUE
+      AutoScalingGroups:
+        - !Ref AutoScalingBackEndGroup  # Attach Auto Scaling Group
+      AutoRollbackConfiguration:
+        Enabled: true
+        Events:
+          - DEPLOYMENT_FAILURE
+          - DEPLOYMENT_STOP_ON_REQUEST
+      LoadBalancerInfo:
+        TargetGroupInfoList:
+          - Name: ALBTargetBackendGroup  # Attach to ALB Target Group
 
 
   # AWS Lambda Function

@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: 'http://localhost:5000',  // Adjust if needed for production
+  baseURL: import.meta.env.VITE_API_URL,  // Adjust if needed for production
 });
 
 export const getLibraryData = async () => {
