@@ -22,7 +22,7 @@ function App() {
 
   return (
     <div className="App">
-      <h1 className="text-4xl text-center">Library Management; System</h1>
+      <h1 className="text-4xl text-center">Library Management System</h1>
       <div className="mt-8 text-center">
         {loading ? (
           <p>Loading...</p>
