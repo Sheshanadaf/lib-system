@@ -110,6 +110,41 @@ Resources:
             Tags:
               - Key: Name
                 Value: LibraryEC2
+  
+  LaunchTemplateForBackEnd:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: LibraryLaunchTemplateForBackEnd
+      VersionDescription: Initial Version
+      LaunchTemplateData:
+        ImageId: ami-0c614dee691cbbf37  # Update AMI for your region
+        InstanceType: t2.micro
+        IamInstanceProfile:
+          Name: !Ref LibraryInstanceProfile
+        SecurityGroupIds:
+          - !GetAtt EC2SecurityGroup.GroupId  # ✅ Correct way to reference Security Group ID
+        UserData:
+          Fn::Base64: |
+            #!/bin/bash
+            sudo yum update -y
+            sudo yum install git -y
+            sudo yum install nodejs -y
+            sudo yum install npm -y
+            sudo yum install ruby wget -y
+            sudo amazon-linux-extras enable epel
+            sudo yum install epel-release -y
+            cd /home/ec2-user
+            wget https://aws-codedeploy-us-east-1.s3.us-east-1.amazonaws.com/latest/install
+            chmod +x install
+            sudo ./install auto
+            sudo service codedeploy-agent start
+            sudo systemctl enable codedeploy-agent
+
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+              - Key: Name
+                Value: LibraryEC2ForBackEnd
 
 
   
@@ -141,7 +176,7 @@ Resources:
       TargetGroupARNs:
         - !Ref ALBTargetBackEndGroup
       LaunchTemplate:
-        LaunchTemplateId: !Ref LaunchTemplate
+        LaunchTemplateId: !Ref LaunchTemplateForBackEnd
         Version: !GetAtt LaunchTemplate.LatestVersionNumber
 
 
