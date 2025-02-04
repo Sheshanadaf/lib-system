@@ -244,8 +244,11 @@ Resources:
     Properties:
       VpcId: vpc-03bb2a2ae6d53f14e # Replace with your actual VPC ID
       Protocol: HTTP
-      Port: 80
+      Port: 5000
       TargetType: instance
+      HealthCheckProtocol: HTTP
+      HealthCheckPort: traffic-port
+      HealthCheckPath: /health
 
 
   # ALB Listener
@@ -264,7 +267,7 @@ Resources:
     Properties:
       LoadBalancerArn: !Ref ApplicationLoadBalancerForBackEnd
       Protocol: HTTP
-      Port: 443
+      Port: 80
       DefaultActions:
         - Type: forward
           TargetGroupArn: !Ref ALBTargetBackEndGroup

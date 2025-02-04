@@ -16,6 +16,11 @@ app.get("/library", async (req, res) => {
   }
 });
 
+app.get('/health', (req, res) => {
+  res.status(200).send('OK');  // ✅ ALB will check this response
+});
+
+
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
