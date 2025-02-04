@@ -41,19 +41,21 @@ Resources:
   EC2SecurityGroupForBackEnd:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Allow HTTP and SSH , 5000 access
+      GroupDescription: Allow HTTP (5000) from ALBBackend only
       SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          CidrIp: 0.0.0.0/0
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          CidrIp: 0.0.0.0/0
         - IpProtocol: tcp
           FromPort: 5000
           ToPort: 5000
+          SourceSecurityGroupId: !GetAtt EC2SecurityGroupForBackEndALB.GroupId
+
+  EC2SecurityGroupForBackEndALB:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow traffic from Frontend EC2s only
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
           CidrIp: 0.0.0.0/0
   
   LibraryEC2Role:
@@ -225,7 +227,7 @@ Resources:
         - Key: idle_timeout.timeout_seconds
           Value: '60'
       SecurityGroups:
-        - !GetAtt EC2SecurityGroupForBackEnd.GroupId 
+        - !GetAtt EC2SecurityGroupForBackEndALB.GroupId 
       Subnets:
         - subnet-0e873e785de68682d # Replace with your subnet ID
         - subnet-0c6bc9756cd950755
@@ -247,8 +249,8 @@ Resources:
       Port: 5000
       TargetType: instance
       HealthCheckProtocol: HTTP
-      HealthCheckPort: traffic-port
-      HealthCheckPath: /health
+      HealthCheckPort: "5000"
+      HealthCheckPath: "/health"
 
 
   # ALB Listener
