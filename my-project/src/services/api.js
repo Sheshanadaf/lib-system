@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: "LibraryALBForBackEnd-673259919.us-east-1.elb.amazonaws.com",  // Adjust if needed for production
+  baseURL: import.meta.env.VITE_API_URL,  // Adjust if needed for production
 });
 
 export const getLibraryData = async () => {
