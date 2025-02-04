@@ -2,7 +2,7 @@ const AWS = require('aws-sdk');
 
 // Set the region and configure DynamoDB
 AWS.config.update({
-  region: "ap-south-1", // Use your desired region
+  region: "us-east-1", // Use your desired region
 });
 
 const docClient = new AWS.DynamoDB.DocumentClient();
@@ -10,7 +10,7 @@ const docClient = new AWS.DynamoDB.DocumentClient();
 // Function to get all items from DynamoDB
 const getItems = async () => {
   const params = {
-    TableName: "LibraryTable",  // Your DynamoDB table name
+    TableName: "LibraryTable1",  // Your DynamoDB table name
   };
 
   try {
