@@ -37,6 +37,24 @@ Resources:
           FromPort: 80
           ToPort: 80
           CidrIp: 0.0.0.0/0
+
+  EC2SecurityGroupForBackEnd:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow HTTP and SSH , 5000 access
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 5000
+          ToPort: 5000
+          CidrIp: 0.0.0.0/0
   
   LibraryEC2Role:
     Type: AWS::IAM::Role
@@ -122,7 +140,7 @@ Resources:
         IamInstanceProfile:
           Name: !Ref LibraryInstanceProfile
         SecurityGroupIds:
-          - !GetAtt EC2SecurityGroup.GroupId  # ✅ Correct way to reference Security Group ID
+          - !GetAtt EC2SecurityGroupForBackEnd.GroupId  # ✅ Correct way to reference Security Group ID
         UserData:
           Fn::Base64: |
             #!/bin/bash
@@ -139,6 +157,9 @@ Resources:
             sudo ./install auto
             sudo service codedeploy-agent start
             sudo systemctl enable codedeploy-agent
+            sudo yum install -y httpd
+            sudo service httpd start
+            sudo systemctl enable httpd
 
         TagSpecifications:
           - ResourceType: instance
@@ -204,7 +225,7 @@ Resources:
         - Key: idle_timeout.timeout_seconds
           Value: '60'
       SecurityGroups:
-        - !GetAtt EC2SecurityGroup.GroupId 
+        - !GetAtt EC2SecurityGroupForBackEnd.GroupId 
       Subnets:
         - subnet-0e873e785de68682d # Replace with your subnet ID
         - subnet-0c6bc9756cd950755
@@ -241,7 +262,7 @@ Resources:
   ALBListenerForBackend:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
-      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      LoadBalancerArn: !Ref ApplicationLoadBalancerForBackEnd
       Protocol: HTTP
       Port: 443
       DefaultActions:
@@ -615,7 +636,7 @@ Resources:
       DeploymentConfigName: CodeDeployDefault.AllAtOnce
       Ec2TagFilters:
         - Key: Name
-          Value: LibraryEC2
+          Value: LibraryEC2ForBackEnd
           Type: KEY_AND_VALUE
       AutoScalingGroups:
         - !Ref AutoScalingBackEndGroup  # Attach Auto Scaling Group
