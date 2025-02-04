@@ -9,7 +9,13 @@ const port = process.env.PORT || 5000;
 // API endpoint to get library data
 app.get("/library", async (req, res) => {
   try {
-    const items = await getItems();
+    // Static data to represent your library items
+    const items = [
+      { id: 1, name: "To Kill a Mockingbird", author: "Harper Lee", year: 1960 },
+      { id: 2, name: "1984", author: "George Orwell", year: 1949 },
+      { id: 3, name: "Moby Dick", author: "Herman Melville", year: 1851 }
+    ];
+
     res.json(items);  // Return the data as JSON
   } catch (error) {
     res.status(500).json({ message: "Error fetching data", error });
