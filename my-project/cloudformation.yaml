@@ -189,6 +189,7 @@ Resources:
       DesiredCapacity: '2'
       VPCZoneIdentifier:
         - subnet-0e873e785de68682d # Replace with your subnet ID
+        - subnet-0c6bc9756cd950755
       TargetGroupARNs:
         - !Ref ALBTargetGroup
       LaunchTemplate:
@@ -204,6 +205,7 @@ Resources:
       DesiredCapacity: '2'
       VPCZoneIdentifier:
         - subnet-0e873e785de68682d # Replace with your subnet ID
+        - subnet-0c6bc9756cd950755
       TargetGroupARNs:
         - !Ref ALBTargetBackEndGroup
       LaunchTemplate:

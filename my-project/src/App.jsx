@@ -90,7 +90,6 @@ function App() {
                 <div>
                   <h2 className="text-lg font-semibold">{item.name}</h2>
                   <p className="text-sm text-gray-600">by {item.author} ({item.year})</p>
-                  <span className="text-xs text-gray-500">Genre: {item.genre}</span>
                 </div>
                 <button className="bg-blue-500 px-4 py-2 text-white rounded-lg hover:bg-blue-700">Borrow</button>
               </li>
