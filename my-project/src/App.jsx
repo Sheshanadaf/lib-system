@@ -36,7 +36,7 @@ function App() {
       <header className="flex justify-between items-center p-5 shadow-md bg-purple-700 text-white">
         <div className="flex items-center space-x-3">
           <FaBook className="text-3xl text-yellow-400" />
-          <h1 className="text-3xl font-bold">Library Management System</h1>
+          <h1 className="text-3xl font-bold">Library Management System Updated</h1>
         </div>
         <div className="flex space-x-4">
           <button className="bg-yellow-400 px-4 py-2 rounded-lg text-black hover:bg-yellow-500">Home</button>
