@@ -23,6 +23,86 @@ Resources:
           KeyType: HASH
       BillingMode: PAY_PER_REQUEST
 
+  # -------------------- SNS Topic --------------------
+  CICDSNSTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: CICD-Success-Notification
+  
+  # -------------------- SNS Subscription (Email) --------------------
+  CICDSNSSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref CICDSNSTopic
+      Protocol: email
+      Endpoint: "sheshanhebron539@gmail.com"  # Replace with your email
+
+  # -------------------- IAM Role for Lambda --------------------
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: LambdaSNSExecutionRole
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: 
+                - lambda.amazonaws.com
+            Action: 
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: LambdaSNSPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource: !Ref CICDSNSTopic
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: "arn:aws:logs:*:*:*"
+
+  # -------------------- Lambda Function --------------------
+  CICDNotificationLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: CICDNotificationLambda
+      Runtime: python3.9
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        ZipFile: |
+          import boto3
+          import json
+          import os
+          
+          sns_client = boto3.client("sns")
+
+          # Fetch the SNS topic ARN from environment variables
+          SNS_TOPIC_ARN = os.environ['SNS_TOPIC_ARN']
+          
+          def lambda_handler(event, context):
+              message = {
+                  "Subject": "CI/CD Deployment Successful ✅",
+                  "Message": "Your deployment has completed successfully!"
+              }
+              
+              response = sns_client.publish(
+                  TopicArn=SNS_TOPIC_ARN,
+                  Message=json.dumps(message),
+                  Subject="CI/CD Deployment Notification"
+              )
+              
+              print("SNS Message Sent:", response)
+              return {"statusCode": 200, "body": "Notification sent"}
+      Environment:
+        Variables:
+          SNS_TOPIC_ARN: !Ref CICDSNSTopic
 
   # Security Group for EC2 Instances
   EC2SecurityGroup:
@@ -351,6 +431,11 @@ Resources:
                   - !Sub "arn:aws:s3:::${FrontendS3Bucket}"
                   - !Sub "arn:aws:s3:::${FrontendS3Bucket}/*"
 
+              - Effect: Allow 
+                Action: 
+                  - lambda:InvokeFunction
+                Resource: !GetAtt CICDNotificationLambda.Arn
+
               # ✅ Allow CodeStar Connections (for GitHub/Bitbucket)
               - Effect: Allow
                 Action:
@@ -665,18 +750,7 @@ Resources:
           - Name: ALBTargetBackendGroup  # Attach to ALB Target Group
 
 
-  # AWS Lambda Function
-  # LibraryLambdaFunction:
-  #   Type: AWS::Lambda::Function
-  #   DependsOn: FrontendS3Bucket  # Ensure S3 bucket is created first
-  #   Properties:
-  #     FunctionName: LibraryBackgroundTask
-  #     Handler: index.handler
-  #     Runtime: nodejs22.x
-  #     Role: arn:aws:iam::583966366465:role/project-role # Replace with actual IAM role
-  #     Code:
-  #       S3Bucket: !Ref FrontendS3Bucket  # Use the S3 bucket reference
-  #       S3Key: library-lambda.zip
+
 
 
 Outputs:
@@ -691,3 +765,11 @@ Outputs:
   DynamoDBTableName:
     Description: DynamoDB Table Name
     Value: !Ref LibraryDynamoDB
+  
+  SNSTopicARN:
+    Description: ARN of the SNS topic
+    Value: !Ref CICDSNSTopic
+
+  LambdaFunctionARN:
+    Description: ARN of the Lambda function
+    Value: !GetAtt CICDNotificationLambda.Arn
