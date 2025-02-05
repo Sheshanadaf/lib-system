@@ -35,7 +35,7 @@ Resources:
     Properties:
       TopicArn: !Ref CICDSNSTopic
       Protocol: email
-      Endpoint: "sheshanhebron539@gmail.com"  # Replace with your email
+      Endpoint: "sheshanhebron61@gmail.com"  # Replace with your email
 
   # -------------------- IAM Role for Lambda --------------------
   LambdaExecutionRole:
@@ -67,6 +67,47 @@ Resources:
                   - logs:PutLogEvents
                 Resource: "arn:aws:logs:*:*:*"
 
+              - Effect: Allow
+                Action:
+                  - codedeploy:GetDeployment
+                  - codedeploy:GetApplication
+                  - codedeploy:GetDeploymentGroup
+                Resource: "*"
+
+  # CloudWatch Event Rule for CodeDeploy Events
+  DeploymentEventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: CodeDeployStatusChangeRule
+      Description: "Rule to capture CodeDeploy deployment status changes"
+      EventPattern:
+        source:
+          - aws.codedeploy
+        detail-type:
+          - CodeDeploy Deployment State-change Notification
+        detail:
+          deploymentId:
+          - exists: true  # ✅ Ensure deploymentId is included
+          state:
+            - SUCCESS
+            - FAILURE
+            - STOP
+            - ROLLBACK
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt CICDNotificationLambda.Arn
+          Id: "DeploymentNotificationTarget"
+
+
+  # Lambda Permission for CloudWatch Events
+  DeploymentLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref CICDNotificationLambda
+      Action: "lambda:InvokeFunction"
+      Principal: "events.amazonaws.com"
+      SourceArn: !GetAtt DeploymentEventRule.Arn
+
   # -------------------- Lambda Function --------------------
   CICDNotificationLambda:
     Type: AWS::Lambda::Function
@@ -80,26 +121,93 @@ Resources:
           import boto3
           import json
           import os
-          
-          sns_client = boto3.client("sns")
-
-          # Fetch the SNS topic ARN from environment variables
-          SNS_TOPIC_ARN = os.environ['SNS_TOPIC_ARN']
+          from datetime import datetime
           
           def lambda_handler(event, context):
-              message = {
-                  "Subject": "CI/CD Deployment Successful ✅",
-                  "Message": "Your deployment has completed successfully!"
-              }
+              print("Received event:", json.dumps(event, default=str))
               
-              response = sns_client.publish(
-                  TopicArn=SNS_TOPIC_ARN,
-                  Message=json.dumps(message),
-                  Subject="CI/CD Deployment Notification"
-              )
+              sns_client = boto3.client('sns')
+              codedeploy = boto3.client('codedeploy')
               
-              print("SNS Message Sent:", response)
-              return {"statusCode": 200, "body": "Notification sent"}
+              try:
+                  # Get deployment details
+                  detail = event.get('detail', {})
+                  status = detail.get('state', 'UNKNOWN')
+                  deployment_id = detail.get('deploymentId', 'UNKNOWN')
+                  application = detail.get('application', 'Unknown')
+                  
+                  print(f"Processing deployment: {deployment_id}, Status: {status}, App: {application}")
+                  
+                  try:
+                      # Get additional deployment info
+                      deployment = codedeploy.get_deployment(deploymentId=deployment_id)
+                      deployment_info = deployment['deploymentInfo']
+                      print(f"Deployment info retrieved: {json.dumps(deployment_info, default=str)}")
+                      
+                      # Create message
+                      message = f"""
+                      Deployment Status Update
+                      
+                      Status: {status}
+                      Application: {application}
+                      Deployment ID: {deployment_id}
+                      Deployment Group: {deployment_info.get('deploymentGroupName', 'N/A')}
+                      Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')}
+                      
+                      Status Details: {deployment_info.get('status', 'N/A')}
+                      
+                      Additional Information:
+                      - Deployment Type: {deployment_info.get('deploymentStyle', {}).get('deploymentType', 'N/A')}
+                      - Deployment Option: {deployment_info.get('deploymentStyle', {}).get('deploymentOption', 'N/A')}
+                      
+                      Please check AWS Console for more details.
+                      """
+                      
+                      print(f"Attempting to send SNS message to topic: {os.environ['SNS_TOPIC_ARN']}")
+                      
+                      # Send notification
+                      response = sns_client.publish(
+                          TopicArn=os.environ['SNS_TOPIC_ARN'],
+                          Message=message,
+                          Subject=f"Deployment {status} - {application}"
+                      )
+                      
+                      print(f"SNS publish response: {json.dumps(response, default=str)}")
+                      
+                      return {
+                          'statusCode': 200,
+                          'body': json.dumps('Notification sent successfully')
+                      }
+                      
+                  except codedeploy.exceptions.DeploymentDoesNotExistException:
+                      error_msg = f"Deployment {deployment_id} not found"
+                      print(error_msg)
+                      raise Exception(error_msg)
+                      
+              except Exception as e:
+                  error_msg = f"Error processing deployment notification: {str(e)}"
+                  print(error_msg)
+                  
+                  try:
+                      # Send error notification
+                      sns_client.publish(
+                          TopicArn=os.environ['SNS_TOPIC_ARN'],
+                          Message=f"""
+                          Error in Deployment Notification
+                          
+                          Error Details: {error_msg}
+                          
+                          Please check AWS Console and CloudWatch logs for more information.
+                          """,
+                          Subject=f"Error - Deployment Notification"
+                      )
+                  except Exception as sns_error:
+                      print(f"Error sending error notification: {str(sns_error)}")
+                  
+                  return {
+                      'statusCode': 500,
+                      'body': json.dumps({'error': error_msg})
+                  }
       Environment:
         Variables:
           SNS_TOPIC_ARN: !Ref CICDSNSTopic
